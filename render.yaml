@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: securitymatchnow
+    runtime: node
+    plan: free
+    region: oregon
+    autoDeploy: true
+    buildCommand: npm install --no-audit --no-fund && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://bjsderrdvhyxyznjjxir.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_SAW3FDjWd6sKh7jRCPUoWg_0tl4AuL5
