@@ -13,7 +13,8 @@ export default async function CustomerRequestPage({ params }: { params: Promise<
   const { data: request } = await supabase.from("security_requests").select("id,zip_code,state,officer_count,officer_type,status,selected_provider_id,description,services(name)").eq("id", id).maybeSingle();
   if (!request) notFound();
 
-  const { data: quotes = [] } = await supabase.from("quotes").select("id,provider_id,hourly_rate,officer_count,minimum_hours,supervisor_fee,vehicle_fee,additional_charges,estimated_total,notes,expires_at,status,providers(legal_name,dba,rating,license_verified,insurance_verified,workers_comp_verified)").eq("request_id", id).order("estimated_total", { ascending: true });
+  const { data: quoteRows } = await supabase.from("quotes").select("id,provider_id,hourly_rate,officer_count,minimum_hours,supervisor_fee,vehicle_fee,additional_charges,estimated_total,notes,expires_at,status,providers(legal_name,dba,rating,license_verified,insurance_verified,workers_comp_verified)").eq("request_id", id).order("estimated_total", { ascending: true });
+  const quotes = quoteRows ?? [];
   const service = request.services as unknown as { name?: string } | null;
 
   return (
