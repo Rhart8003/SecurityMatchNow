@@ -2,13 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { createClient } from "@/lib/supabase/server";
+import { BillingButton } from "./billing-button";
 
 function serviceName(value: unknown) {
   const relation = value as { name?: string } | null;
   return relation?.name || "Security Service";
 }
 
-export default async function ProviderDashboard() {
+export default async function ProviderDashboard({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  const billingSuccess = params.billing === "success";
+
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub as string | undefined;
@@ -22,19 +26,26 @@ export default async function ProviderDashboard() {
   const [{ data: matches = [] }, { data: quotes = [] }, { data: subscription }] = await Promise.all([
     supabase.from("matches").select("id,request_id,match_score,sponsored,created_at,security_requests(id,zip_code,city,state,officer_count,officer_type,is_urgent,status,services(name))").eq("provider_id", provider.id).order("created_at", { ascending: false }),
     supabase.from("quotes").select("id,status,estimated_total").eq("provider_id", provider.id),
-    supabase.from("subscriptions").select("plan,status").eq("provider_id", provider.id).maybeSingle(),
+    supabase.from("subscriptions").select("plan,status,stripe_customer_id,stripe_subscription_id").eq("provider_id", provider.id).maybeSingle(),
   ]);
 
   const jobsWon = (quotes || []).filter((quote) => quote.status === "accepted");
   const valueWon = jobsWon.reduce((sum, quote) => sum + Number(quote.estimated_total || 0), 0);
+  const plan = subscription?.plan || "basic";
+  const paid = plan !== "basic" && !!subscription?.stripe_customer_id;
 
   return (
     <main>
       <Header />
       <div className="container dashboard">
+        {billingSuccess && <div className="form-alert success billing-success">Stripe checkout completed. Your paid plan will appear here as soon as the signed Stripe webhook confirms the subscription.</div>}
+
         <div className="dashboard-title">
           <div><span className="eyebrow">PROVIDER DASHBOARD</span><h1>{provider.legal_name}</h1></div>
-          <Link href="/providers" className="button button-dark">Plan: {(subscription?.plan || "basic").toUpperCase()}</Link>
+          <div className="provider-billing-actions">
+            <Link href="/providers" className={`button ${plan === "prime" ? "button-light" : "button-dark"}`}>Plan: {plan.toUpperCase()}</Link>
+            {paid && <BillingButton />}
+          </div>
         </div>
 
         {provider.status !== "active" && <div className="provider-status-banner"><b>Marketplace status: {provider.status}</b><span>Your profile is saved, but customer leads begin only after SecurityMatch activates the provider.</span></div>}
