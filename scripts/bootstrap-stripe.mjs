@@ -1,6 +1,16 @@
 import Stripe from "stripe";
 
-const key = process.env.STRIPE_SECRET_KEY || "";
+const rawKey = process.env.STRIPE_SECRET_KEY || "";
+const key = rawKey.trim();
+
+console.log("SECURITYMATCH_STRIPE_KEY_DIAGNOSTIC=" + JSON.stringify({
+  present: rawKey.length > 0,
+  trimmedLength: key.length,
+  startsTest: key.startsWith("sk_test_"),
+  startsLive: key.startsWith("sk_live_"),
+  trimChanged: rawKey !== key,
+}));
+
 if (!key.startsWith("sk_test_")) {
   console.log("SECURITYMATCH_STRIPE_BOOTSTRAP_SKIPPED");
   process.exit(0);
