@@ -4,10 +4,18 @@ export type PaidPlan = "verified" | "professional" | "prime";
 
 let stripeClient: Stripe | null = null;
 
+function readStripeSecret() {
+  return (
+    process.env.STRIPE_SECRET_KEY_FULL ||
+    process.env.STRIPE_SECRET_KEY ||
+    ""
+  ).trim();
+}
+
 export function getStripe() {
-  const secretKey = (process.env.STRIPE_SECRET_KEY || "").trim();
+  const secretKey = readStripeSecret();
   if (!secretKey) {
-    throw new Error("STRIPE_SECRET_KEY is not configured");
+    throw new Error("Stripe secret key is not configured");
   }
 
   if (!stripeClient) {
