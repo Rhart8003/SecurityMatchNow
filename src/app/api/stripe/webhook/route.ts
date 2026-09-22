@@ -1,42 +1,84 @@
 import Stripe from "stripe";
+import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe, planForPrice } from "@/lib/stripe";
 
-async function syncSubscription(subscription: Stripe.Subscription) {
-  const admin = createAdminClient();
-  const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
-  const subscriptionId = subscription.id;
-  const providerId = subscription.metadata?.provider_id || null;
-  const priceId = subscription.items.data[0]?.price?.id;
-  const plan = planForPrice(priceId);
+type WebhookEventType =
+  | "checkout.session.completed"
+  | "customer.subscription.updated"
+  | "customer.subscription.deleted";
 
-  if (!plan) {
-    console.warn("Stripe subscription price is not mapped to a SecurityMatch plan", priceId);
-    return;
+function createWebhookDbClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const webhookDbKey = process.env.SECURITYMATCH_WEBHOOK_DB_KEY;
+
+  if (!url || !publishableKey || !webhookDbKey) {
+    throw new Error("Webhook database connection is not configured");
   }
 
-  let query = admin.from("subscriptions").update({
+  return createClient(url, publishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        "x-securitymatch-webhook-key": webhookDbKey,
+      },
+    },
+  });
+}
+
+function stripeId(value: string | { id: string } | null | undefined) {
+  if (!value) return null;
+  return typeof value === "string" ? value : value.id;
+}
+
+function periodEndIso(subscription: Stripe.Subscription) {
+  const subscriptionLevel = subscription as unknown as { current_period_end?: number };
+  const itemLevel = subscription.items.data[0] as unknown as { current_period_end?: number };
+  const seconds = subscriptionLevel.current_period_end ?? itemLevel?.current_period_end;
+  return typeof seconds === "number" ? new Date(seconds * 1000).toISOString() : null;
+}
+
+async function enqueueSubscriptionEvent(
+  eventId: string,
+  eventType: WebhookEventType,
+  subscription: Stripe.Subscription,
+) {
+  const priceId = subscription.items.data[0]?.price?.id;
+  const plan = eventType === "customer.subscription.deleted" ? null : planForPrice(priceId);
+
+  if (eventType !== "customer.subscription.deleted" && !plan) {
+    throw new Error(`Stripe price is not mapped to a SecurityMatch plan: ${priceId || "missing"}`);
+  }
+
+  const providerId = subscription.metadata?.provider_id || null;
+  const customerId = stripeId(subscription.customer);
+
+  if (!providerId && !customerId) {
+    throw new Error("Stripe subscription is missing provider and customer identity");
+  }
+
+  const db = createWebhookDbClient();
+  const { error } = await db.from("stripe_webhook_inbox").insert({
+    event_id: eventId,
+    event_type: eventType,
+    provider_id: providerId,
     plan,
-    status: subscription.status,
     stripe_customer_id: customerId,
-    stripe_subscription_id: subscriptionId,
-    updated_at: new Date().toISOString(),
+    stripe_subscription_id: subscription.id,
+    subscription_status: subscription.status,
+    current_period_end: periodEndIso(subscription),
   });
 
-  if (providerId) {
-    query = query.eq("provider_id", providerId);
-  } else {
-    query = query.eq("stripe_customer_id", customerId);
-  }
-
-  const { error } = await query;
   if (error) throw error;
 }
 
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
 
   if (!signature || !webhookSecret) {
     return NextResponse.json({ error: "Webhook is not configured." }, { status: 503 });
@@ -53,64 +95,39 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const admin = createAdminClient();
-    const { data: existing } = await admin
-      .from("stripe_webhook_events")
-      .select("id")
-      .eq("id", event.id)
-      .maybeSingle();
-
-    if (existing) {
-      return NextResponse.json({ received: true, duplicate: true });
-    }
-
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const providerId = session.metadata?.provider_id;
-        const plan = session.metadata?.plan as "verified" | "professional" | "prime" | undefined;
-        const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
-        const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+        const subscriptionId = stripeId(session.subscription);
 
-        if (providerId && plan && customerId && subscriptionId) {
-          const stripeSubscription = await getStripe().subscriptions.retrieve(subscriptionId);
-          await syncSubscription(stripeSubscription);
+        if (!subscriptionId) {
+          throw new Error("Checkout session completed without a subscription");
         }
+
+        const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+        await enqueueSubscriptionEvent(event.id, event.type, subscription);
         break;
       }
 
-      case "customer.subscription.updated": {
-        await syncSubscription(event.data.object as Stripe.Subscription);
+      case "customer.subscription.updated":
+        await enqueueSubscriptionEvent(
+          event.id,
+          event.type,
+          event.data.object as Stripe.Subscription,
+        );
         break;
-      }
 
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription;
-        const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
-        const providerId = subscription.metadata?.provider_id || null;
-
-        let query = admin.from("subscriptions").update({
-          plan: "basic",
-          status: "canceled",
-          stripe_subscription_id: null,
-          updated_at: new Date().toISOString(),
-        });
-
-        query = providerId ? query.eq("provider_id", providerId) : query.eq("stripe_customer_id", customerId);
-        const { error } = await query;
-        if (error) throw error;
+      case "customer.subscription.deleted":
+        await enqueueSubscriptionEvent(
+          event.id,
+          event.type,
+          event.data.object as Stripe.Subscription,
+        );
         break;
-      }
 
       default:
         break;
     }
-
-    const { error: logError } = await admin.from("stripe_webhook_events").insert({
-      id: event.id,
-      event_type: event.type,
-    });
-    if (logError && logError.code !== "23505") throw logError;
 
     return NextResponse.json({ received: true });
   } catch (error) {
