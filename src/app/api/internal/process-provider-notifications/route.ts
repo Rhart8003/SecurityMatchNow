@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -10,10 +11,16 @@ type OutboxRow = {
   attempts: number;
 };
 
+const NOTIFY_SECRET_HASH = "b0b72057f1f4da1e0654dfabf386149e578cb9739f00e51e85d598eb52c9a9ac";
+
 function authorized(request: NextRequest) {
-  const expected = process.env.NOTIFY_CRON_SECRET?.trim();
   const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-  return Boolean(expected && supplied && expected === supplied);
+  if (!supplied) return false;
+
+  const actual = createHash("sha256").update(supplied).digest();
+  const expected = Buffer.from(NOTIFY_SECRET_HASH, "hex");
+
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 function workerClient() {
