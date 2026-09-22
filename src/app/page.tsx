@@ -215,7 +215,16 @@ export default function HomePage() {
       </section>
 
       <footer className="footer">
-        <div className="container footer-row"><span>© 2026 SecurityMatch · SecurityMatchNow.com</span><span>Private security marketplace · United States</span></div>
+        <div className="container footer-row">
+          <span>© 2026 SecurityMatch · SecurityMatchNow.com</span>
+          <div className="footer-links">
+            <Link href="/terms">Terms</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/provider-terms">Provider Terms</Link>
+            <Link href="/billing-policy">Billing</Link>
+            <Link href="/verification-policy">Verification</Link>
+          </div>
+        </div>
       </footer>
     </main>
   );
