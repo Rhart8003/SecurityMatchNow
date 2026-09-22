@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { appUrl, getStripe, priceForPlan, type PaidPlan } from "@/lib/stripe";
+import { appUrl, billingMode, getStripe, priceForPlan, type PaidPlan } from "@/lib/stripe";
 
 const paidPlans = new Set<PaidPlan>(["verified", "professional", "prime"]);
 
@@ -13,9 +13,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
     }
 
-    const price = priceForPlan(plan);
+    const mode = billingMode();
+    const price = priceForPlan(plan, mode);
+
     if (!price) {
-      return NextResponse.json({ error: "This plan is not configured for billing yet." }, { status: 503 });
+      return NextResponse.json({ error: `This plan is not configured for ${mode} billing yet.` }, { status: 503 });
     }
 
     const supabase = await createClient();
@@ -38,22 +40,29 @@ export async function POST(request: NextRequest) {
 
     const { data: subscription } = await supabase
       .from("subscriptions")
-      .select("stripe_customer_id,stripe_subscription_id,status")
+      .select("stripe_customer_id,stripe_subscription_id,stripe_mode,status")
       .eq("provider_id", provider.id)
       .maybeSingle();
 
-    if (subscription?.stripe_subscription_id && !["canceled", "incomplete_expired"].includes(subscription.status || "")) {
+    const sameModeSubscription = subscription?.stripe_mode === mode;
+    const activeSameModeSubscription =
+      sameModeSubscription &&
+      subscription?.stripe_subscription_id &&
+      !["canceled", "incomplete_expired"].includes(subscription.status || "");
+
+    if (activeSameModeSubscription) {
       return NextResponse.json({ error: "Use Manage Billing to change an existing paid plan.", code: "PORTAL_REQUIRED" }, { status: 409 });
     }
 
     const stripe = getStripe();
     const base = appUrl();
+    const reusableCustomer = sameModeSubscription ? subscription?.stripe_customer_id : null;
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price, quantity: 1 }],
-      customer: subscription?.stripe_customer_id || undefined,
-      customer_email: subscription?.stripe_customer_id ? undefined : (provider.business_email || user.email || undefined),
+      customer: reusableCustomer || undefined,
+      customer_email: reusableCustomer ? undefined : (provider.business_email || user.email || undefined),
       success_url: `${base}/dashboard/provider?billing=success`,
       cancel_url: `${base}/providers?billing=cancelled`,
       allow_promotion_codes: true,
@@ -62,11 +71,13 @@ export async function POST(request: NextRequest) {
       metadata: {
         provider_id: provider.id,
         plan,
+        stripe_mode: mode,
       },
       subscription_data: {
         metadata: {
           provider_id: provider.id,
           plan,
+          stripe_mode: mode,
         },
       },
     });
