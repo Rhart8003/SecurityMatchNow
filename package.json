@@ -7,8 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "postinstall": "node scripts/bootstrap-stripe-webhook.mjs"
+    "lint": "next lint"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
