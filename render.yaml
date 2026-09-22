@@ -5,6 +5,7 @@ services:
     plan: free
     region: oregon
     autoDeploy: true
+    healthCheckPath: /api/health
     buildCommand: npm install --no-audit --no-fund && npm run build
     startCommand: npm start
     envVars:
