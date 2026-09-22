@@ -1,9 +1,12 @@
 import Stripe from "stripe";
 
-const rawKey = process.env.STRIPE_SECRET_KEY || "";
+const preferred = process.env.STRIPE_SECRET_KEY_FULL || "";
+const fallback = process.env.STRIPE_SECRET_KEY || "";
+const rawKey = preferred || fallback;
 const key = rawKey.trim();
 
 console.log("SECURITYMATCH_STRIPE_KEY_DIAGNOSTIC=" + JSON.stringify({
+  source: preferred ? "STRIPE_SECRET_KEY_FULL" : (fallback ? "STRIPE_SECRET_KEY" : "none"),
   present: rawKey.length > 0,
   trimmedLength: key.length,
   startsTest: key.startsWith("sk_test_"),
@@ -28,15 +31,24 @@ const out = [];
 
 for (const plan of plans) {
   let product = products.data.find((p) => p.metadata?.securitymatch_plan === plan.slug);
+
   if (!product) {
     product = await stripe.products.create({
       name: plan.name,
       description: `${plan.name} monthly provider subscription for SecurityMatch.`,
-      metadata: { securitymatch_plan: plan.slug, securitymatch_product: "provider_subscription" },
+      metadata: {
+        securitymatch_plan: plan.slug,
+        securitymatch_product: "provider_subscription",
+      },
     });
   }
 
-  const prices = await stripe.prices.list({ product: product.id, active: true, limit: 100 });
+  const prices = await stripe.prices.list({
+    product: product.id,
+    active: true,
+    limit: 100,
+  });
+
   let price = prices.data.find((p) =>
     p.currency === "usd" &&
     p.unit_amount === plan.amount &&
@@ -53,7 +65,11 @@ for (const plan of plans) {
     });
   }
 
-  out.push({ plan: plan.slug, productId: product.id, priceId: price.id });
+  out.push({
+    plan: plan.slug,
+    productId: product.id,
+    priceId: price.id,
+  });
 }
 
 console.log("SECURITYMATCH_STRIPE_PRICES=" + JSON.stringify(out));
