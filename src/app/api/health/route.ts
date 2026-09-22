@@ -10,7 +10,7 @@ export function GET() {
   );
   const webhookConfigured = Boolean(
     process.env.STRIPE_WEBHOOK_SECRET?.trim() &&
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    process.env.SECURITYMATCH_WEBHOOK_DB_KEY?.trim()
   );
 
   return NextResponse.json({
