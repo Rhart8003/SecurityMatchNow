@@ -7,6 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 
 type Step = 1 | 2 | 3 | 4;
 
+type ZipGeo = {
+  city?: string | null;
+  stateCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
 type PendingRequest = {
   zip: string;
   state: string;
@@ -37,10 +44,32 @@ function isoDateTime(date: string, time: string) {
   return Number.isNaN(value.getTime()) ? null : value.toISOString();
 }
 
-export function RequestForm({ initialZip = "", initialService = "", urgent = false, resume = false }: { initialZip?: string; initialService?: string; urgent?: boolean; resume?: boolean }) {
+async function lookupZip(zip: string): Promise<ZipGeo | null> {
+  try {
+    const response = await fetch(`/api/geo/zip?zip=${encodeURIComponent(zip)}`);
+    if (!response.ok) return null;
+    return await response.json() as ZipGeo;
+  } catch {
+    return null;
+  }
+}
+
+export function RequestForm({
+  initialZip = "",
+  initialState = "CA",
+  initialService = "",
+  urgent = false,
+  resume = false,
+}: {
+  initialZip?: string;
+  initialState?: string;
+  initialService?: string;
+  urgent?: boolean;
+  resume?: boolean;
+}) {
   const [step, setStep] = useState<Step>(1);
   const [zip, setZip] = useState(initialZip);
-  const [state, setState] = useState("CA");
+  const [state, setState] = useState(initialState || "CA");
   const [service, setService] = useState(initialService || (urgent ? "emergency-security" : ""));
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -105,10 +134,10 @@ export function RequestForm({ initialZip = "", initialService = "", urgent = fal
         <p>Your request for <strong>{selectedService?.name ?? "security services"}</strong> in ZIP <strong>{zip}</strong> has been saved.</p>
         <div className="match-progress">
           <div className="done">✓ Request saved securely</div>
-          <div className="done">✓ Location and service checked</div>
+          <div className="done">✓ Location, radius and service checked</div>
           <div className="active">● {matchCount === null ? "Checking provider matches" : `${matchCount} provider match${matchCount === 1 ? "" : "es"} available now`}</div>
         </div>
-        {matchCount === 0 && <p className="demo-note">No active provider currently matches this exact service area. The request remains in your dashboard while the provider network expands.</p>}
+        {matchCount === 0 && <p className="demo-note">No active provider currently matches this service and coverage area. The request remains in your dashboard while the provider network expands.</p>}
         <div className="request-buttons">
           <a className="button button-primary" href="/dashboard/customer">View My Dashboard</a>
           <button className="button button-ghost" onClick={() => { setSubmitted(false); setStep(1); setRequestId(""); }}>New Request</button>
@@ -150,6 +179,13 @@ export function RequestForm({ initialZip = "", initialService = "", urgent = fal
       return;
     }
 
+    const geo = await lookupZip(zip);
+    if (geo?.stateCode && geo.stateCode !== state) {
+      setError(`ZIP ${zip} is in ${geo.stateCode}, not ${state}. Please correct the ZIP or state.`);
+      setLoading(false);
+      return;
+    }
+
     const { error: profileError } = await supabase.from("profiles").update({
       first_name: firstName,
       last_name: lastName,
@@ -175,7 +211,10 @@ export function RequestForm({ initialZip = "", initialService = "", urgent = fal
       customer_user_id: user.id,
       service_id: serviceRecord.id,
       zip_code: zip,
+      city: geo?.city || null,
       state,
+      latitude: geo?.latitude ?? null,
+      longitude: geo?.longitude ?? null,
       start_at: isoDateTime(startDate, startTime),
       end_at: isoDateTime(endDate || startDate, endTime),
       officer_count: Number(officerCount),
