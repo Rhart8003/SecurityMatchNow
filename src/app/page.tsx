@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { services } from "@/lib/services";
+import { launchMarkets } from "@/lib/markets";
 
 export default function HomePage() {
+  const featuredMarkets = launchMarkets.filter((market) => market.phase <= 2).slice(0, 6);
+
   return (
     <main>
       <Header />
@@ -27,28 +30,14 @@ export default function HomePage() {
 
           <div className="match-card" aria-label="Sample provider match">
             <div className="match-card-top">
-              <div>
-                <span className="status-dot" /> Example match preview
-              </div>
+              <div><span className="status-dot" /> Example match preview</div>
               <span className="verified-pill">Verified</span>
             </div>
             <div className="match-location">Fresno, CA · 93721</div>
             <h2>See qualified providers and match scores</h2>
-            <div className="provider-mini">
-              <div className="avatar">CV</div>
-              <div><strong>Central Valley Security</strong><span>Event · Patrol · Unarmed</span></div>
-              <b>96%</b>
-            </div>
-            <div className="provider-mini">
-              <div className="avatar">PS</div>
-              <div><strong>Premier Security Group</strong><span>Armed · Commercial · Fire Watch</span></div>
-              <b>92%</b>
-            </div>
-            <div className="provider-mini">
-              <div className="avatar">SP</div>
-              <div><strong>SafePoint Protective</strong><span>Construction · Mobile Patrol</span></div>
-              <b>89%</b>
-            </div>
+            <div className="provider-mini"><div className="avatar">CV</div><div><strong>Central Valley Security</strong><span>Event · Patrol · Unarmed</span></div><b>96%</b></div>
+            <div className="provider-mini"><div className="avatar">PS</div><div><strong>Premier Security Group</strong><span>Armed · Commercial · Fire Watch</span></div><b>92%</b></div>
+            <div className="provider-mini"><div className="avatar">SP</div><div><strong>SafePoint Protective</strong><span>Construction · Mobile Patrol</span></div><b>89%</b></div>
             <div className="match-note">Match scores consider location, service fit, verification and responsiveness.</div>
           </div>
         </div>
@@ -58,8 +47,28 @@ export default function HomePage() {
         <div className="container trust-grid">
           <div><strong>Qualified providers</strong><span>Designed around licensing and verification</span></div>
           <div><strong>Compare quotes</strong><span>Review options before you choose</span></div>
-          <div><strong>Local matching</strong><span>ZIP-based service-area matching</span></div>
+          <div><strong>Radius-based matching</strong><span>Providers define the territory they actually serve</span></div>
           <div><strong>Urgent coverage</strong><span>Rapid-response request option</span></div>
+        </div>
+      </section>
+
+      <section className="section section-muted">
+        <div className="container">
+          <div className="section-heading home-markets-heading">
+            <div><span className="eyebrow">LAUNCH MARKETS</span><h2>Building local density market by market.</h2></div>
+            <Link href="/markets" className="text-link">View rollout markets →</Link>
+          </div>
+          <div className="market-grid">
+            {featuredMarkets.map((market) => (
+              <Link href={"/markets/" + market.slug} className={"market-card phase-" + market.phase} key={market.slug}>
+                <span className="market-phase">{market.phaseLabel}</span>
+                <h2>{market.name}, {market.state}</h2>
+                <p>{market.pitch}</p>
+                <div className="market-tags">{market.verticals.slice(0,3).map((vertical) => <span key={vertical}>{vertical}</span>)}</div>
+                <b>Open market →</b>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -71,7 +80,7 @@ export default function HomePage() {
           </div>
           <div className="service-grid">
             {services.slice(0, 8).map((service) => (
-              <Link key={service.slug} href={`/find-security?service=${service.slug}`} className="service-card">
+              <Link key={service.slug} href={"/find-security?service=" + service.slug} className="service-card">
                 <span className="service-icon">{service.icon}</span>
                 <h3>{service.name}</h3>
                 <p>{service.description}</p>
@@ -87,7 +96,7 @@ export default function HomePage() {
           <div className="center-heading"><span className="eyebrow">HOW IT WORKS</span><h2>Security in three simple steps</h2></div>
           <div className="steps">
             <div className="step"><span>01</span><h3>Tell us what you need</h3><p>Enter your ZIP code, service type, dates, hours and coverage requirements.</p></div>
-            <div className="step"><span>02</span><h3>Get matched</h3><p>We identify providers whose services and coverage areas fit your request.</p></div>
+            <div className="step"><span>02</span><h3>Get matched by service radius</h3><p>We identify providers whose services and travel territory fit your request.</p></div>
             <div className="step"><span>03</span><h3>Compare and choose</h3><p>Review provider information and quotes, then select the company that fits your needs.</p></div>
           </div>
         </div>
