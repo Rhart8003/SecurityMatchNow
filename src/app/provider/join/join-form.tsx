@@ -48,6 +48,7 @@ export function ProviderJoinForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [acceptedProviderTerms, setAcceptedProviderTerms] = useState(false);
 
   const selectedNames = useMemo(() => services.filter((service) => selectedServices.includes(service.slug)).map((service) => service.name), [selectedServices]);
 
@@ -74,9 +75,28 @@ export function ProviderJoinForm({
       setError("Complete your company name, email, state, at least one service, and a valid service-area ZIP (or choose statewide coverage).");
       return;
     }
+    if (!acceptedProviderTerms) {
+      setError("Please accept the Provider Terms before creating a provider profile.");
+      return;
+    }
 
     setLoading(true);
     const supabase = createClient();
+
+    const acceptedAt = new Date().toISOString();
+    const { error: termsError } = await supabase.auth.updateUser({
+      data: {
+        provider_terms_accepted_at: acceptedAt,
+        provider_terms_version: "2026-09-22",
+        verification_policy_acknowledged_at: acceptedAt,
+        verification_policy_version: "2026-09-22",
+      },
+    });
+    if (termsError) {
+      setError("We could not record your Provider Terms acceptance. Please try again.");
+      setLoading(false);
+      return;
+    }
 
     const { data: existing } = await supabase.from("providers").select("id").eq("owner_user_id", userId).maybeSingle();
     if (existing) {
@@ -213,7 +233,10 @@ export function ProviderJoinForm({
       </div>
       <p className="radius-note">SecurityMatch will match requests inside the selected radius from your base ZIP, within the licensed state.</p>
       <label className="consent"><input type="checkbox" checked={statewide} onChange={(e) => setStatewide(e.target.checked)} /> My company can accept qualified assignments statewide in {state}.</label>
-      <button className="button button-primary request-next" disabled={loading} onClick={submit}>{loading ? "Creating profile…" : "Create Provider Profile"}</button>
+      <label className="consent provider-terms-consent">
+        <input type="checkbox" checked={acceptedProviderTerms} onChange={(e) => setAcceptedProviderTerms(e.target.checked)} required /> I am authorized to act for this company and agree to the <Link href="/provider-terms" target="_blank">Provider Terms</Link>, <Link href="/billing-policy" target="_blank">Billing Policy</Link>, and <Link href="/verification-policy" target="_blank">Verification Policy</Link>.
+      </label>
+      <button className="button button-primary request-next" disabled={loading || !acceptedProviderTerms} onClick={submit}>{loading ? "Creating profile…" : "Create Provider Profile"}</button>
       <p className="auth-helper">SecurityMatch verifies provider information separately. A paid plan never substitutes for licensing or marketplace approval.</p>
     </div>
   );
