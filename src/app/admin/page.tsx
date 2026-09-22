@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { createClient } from "@/lib/supabase/server";
 import { ProviderActions } from "./provider-actions";
+import { MarketMetrics } from "./market-metrics";
 
 type PlanCode = "basic" | "verified" | "professional" | "prime";
 const PLAN_MRR: Record<PlanCode, number> = {
@@ -90,6 +91,8 @@ export default async function AdminDashboard() {
           <div><b>{money(projectedMrr)}</b><span>Projected provider MRR</span></div>
           <div><b>{money(awardedValue)}</b><span>Accepted quote value</span></div>
         </div>
+
+        <MarketMetrics />
 
         <section className="admin-section">
           <div className="section-heading admin-heading">
