@@ -4,6 +4,7 @@ import { Header } from "@/components/header";
 import { createClient } from "@/lib/supabase/server";
 import { BillingButton } from "./billing-button";
 import { ServiceAreaEditor } from "./service-area-editor";
+import { ProviderNotificationInbox } from "./notification-inbox";
 
 function serviceName(value: unknown) {
   const relation = value as { name?: string } | null;
@@ -24,11 +25,12 @@ export default async function ProviderDashboard({ searchParams }: { searchParams
     return <main><Header /><div className="container dashboard"><div className="empty-state"><span className="eyebrow">PROVIDER DASHBOARD</span><h1>Create your provider profile.</h1><p>Your account is ready, but you haven’t registered a security company yet.</p><Link href="/provider/join" className="button button-primary">Create Provider Profile</Link></div></div></main>;
   }
 
-  const [{ data: matches = [] }, { data: quotes = [] }, { data: subscription }, { data: area }] = await Promise.all([
+  const [{ data: matches = [] }, { data: quotes = [] }, { data: subscription }, { data: area }, { data: notifications = [] }] = await Promise.all([
     supabase.from("matches").select("id,request_id,match_score,distance_miles,sponsored,affiliated,created_at,security_requests(id,zip_code,city,state,officer_count,officer_type,is_urgent,status,services(name))").eq("provider_id", provider.id).order("created_at", { ascending: false }),
     supabase.from("quotes").select("id,status,estimated_total").eq("provider_id", provider.id),
     supabase.from("subscriptions").select("plan,status,stripe_customer_id,stripe_subscription_id").eq("provider_id", provider.id).maybeSingle(),
     supabase.from("provider_service_areas").select("id,zip_code,city,state,statewide,radius_miles").eq("provider_id", provider.id).order("created_at", { ascending: true }).limit(1).maybeSingle(),
+    supabase.from("provider_notifications").select("id,request_id,title,message,read_at,created_at").eq("provider_id", provider.id).order("created_at", { ascending: false }).limit(20),
   ]);
 
   const jobsWon = (quotes || []).filter((quote) => quote.status === "accepted");
@@ -58,6 +60,8 @@ export default async function ProviderDashboard({ searchParams }: { searchParams
           <div><b>{jobsWon.length}</b><span>Jobs won</span></div>
           <div><b>{"$" + valueWon.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b><span>Accepted quote value</span></div>
         </div>
+
+        <ProviderNotificationInbox initialNotifications={(notifications || []) as Array<{ id: string; request_id: string; title: string; message: string; read_at: string | null; created_at: string }>} />
 
         <ServiceAreaEditor providerId={provider.id} primaryState={provider.primary_state} area={area || null} />
 
