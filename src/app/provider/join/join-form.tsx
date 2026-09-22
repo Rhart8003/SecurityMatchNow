@@ -7,8 +7,29 @@ import { usStates } from "@/lib/states";
 import { createClient } from "@/lib/supabase/client";
 
 type UserState = "checking" | "signed-out" | "signed-in";
+type ZipGeo = { city?: string | null; stateCode?: string | null; latitude?: number | null; longitude?: number | null };
 
-export function ProviderJoinForm() {
+const radiusOptions = [25, 50, 75, 100, 150];
+
+async function lookupZip(zip: string): Promise<ZipGeo | null> {
+  try {
+    const response = await fetch(`/api/geo/zip?zip=${encodeURIComponent(zip)}`);
+    if (!response.ok) return null;
+    return await response.json() as ZipGeo;
+  } catch {
+    return null;
+  }
+}
+
+export function ProviderJoinForm({
+  initialZip = "",
+  initialState = "CA",
+  marketName,
+}: {
+  initialZip?: string;
+  initialState?: string;
+  marketName?: string;
+}) {
   const [userState, setUserState] = useState<UserState>("checking");
   const [userId, setUserId] = useState("");
   const [legalName, setLegalName] = useState("");
@@ -16,11 +37,12 @@ export function ProviderJoinForm() {
   const [businessPhone, setBusinessPhone] = useState("");
   const [businessEmail, setBusinessEmail] = useState("");
   const [website, setWebsite] = useState("");
-  const [state, setState] = useState("CA");
+  const [state, setState] = useState(initialState || "CA");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [yearsInBusiness, setYearsInBusiness] = useState("");
   const [officerCount, setOfficerCount] = useState("");
-  const [zip, setZip] = useState("");
+  const [zip, setZip] = useState(initialZip);
+  const [radius, setRadius] = useState("50");
   const [statewide, setStatewide] = useState(false);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,6 +85,21 @@ export function ProviderJoinForm() {
       return;
     }
 
+    let geo: ZipGeo | null = null;
+    if (!statewide) {
+      geo = await lookupZip(zip);
+      if (!geo) {
+        setError("We could not locate that ZIP code. Please check it and try again.");
+        setLoading(false);
+        return;
+      }
+      if (geo.stateCode && geo.stateCode !== state) {
+        setError(`ZIP ${zip} is in ${geo.stateCode}, not ${state}. Please correct the ZIP or state.`);
+        setLoading(false);
+        return;
+      }
+    }
+
     const { data: provider, error: providerError } = await supabase.from("providers").insert({
       owner_user_id: userId,
       legal_name: legalName,
@@ -100,9 +137,14 @@ export function ProviderJoinForm() {
     const { error: areaError } = await supabase.from("provider_service_areas").insert({
       provider_id: provider.id,
       zip_code: statewide ? null : zip,
+      city: statewide ? null : (geo?.city || null),
       state,
       statewide,
+      radius_miles: statewide ? null : Number(radius),
+      anchor_lat: statewide ? null : (geo?.latitude ?? null),
+      anchor_lng: statewide ? null : (geo?.longitude ?? null),
     });
+
     if (areaError) {
       setError("Your company and services were saved, but the service area needs attention in your dashboard.");
       setLoading(false);
@@ -116,13 +158,14 @@ export function ProviderJoinForm() {
   if (userState === "checking") return <div className="request-shell"><p>Checking your SecurityMatch account…</p></div>;
 
   if (userState === "signed-out") {
+    const joinPath = `/provider/join?zip=${encodeURIComponent(initialZip)}&state=${encodeURIComponent(initialState)}`;
     return (
       <div className="request-shell">
         <span className="eyebrow">PROVIDER ACCOUNT</span>
         <h1>Start with a free SecurityMatch account.</h1>
         <p className="form-copy">Sign in or create an account first. After that, you’ll return here to create your security-company profile and service area.</p>
-        <Link href={`/login?mode=signup&next=${encodeURIComponent("/provider/join")}`} className="button button-primary full-button">Create Provider Account</Link>
-        <Link href={`/login?next=${encodeURIComponent("/provider/join")}`} className="button button-ghost full-button secondary-button">I already have an account</Link>
+        <Link href={`/login?mode=signup&next=${encodeURIComponent(joinPath)}`} className="button button-primary full-button">Create Provider Account</Link>
+        <Link href={`/login?next=${encodeURIComponent(joinPath)}`} className="button button-ghost full-button secondary-button">I already have an account</Link>
       </div>
     );
   }
@@ -134,7 +177,7 @@ export function ProviderJoinForm() {
         <span className="eyebrow">PROFILE SUBMITTED</span>
         <h1>Your provider profile is in SecurityMatch.</h1>
         <p><strong>{legalName}</strong> is on the Basic plan and is pending marketplace approval. Your selected services are {selectedNames.join(", ")}.</p>
-        <p className="demo-note">Pending providers can manage their profile, but SecurityMatch will not send customer leads until the company is approved/activated.</p>
+        <p className="demo-note">{statewide ? `Coverage: statewide in ${state}.` : `Coverage: ${radius} miles from ZIP ${zip}.`} Pending providers can manage their profile, but SecurityMatch will not send customer leads until the company is approved/activated.</p>
         <Link href="/dashboard/provider" className="button button-primary">Open Provider Dashboard</Link>
       </div>
     );
@@ -143,7 +186,7 @@ export function ProviderJoinForm() {
   return (
     <div className="request-shell">
       <span className="eyebrow">COMPANY REGISTRATION</span>
-      <h1>Create your provider profile.</h1>
+      <h1>{marketName ? `Join SecurityMatch in ${marketName}.` : "Create your provider profile."}</h1>
       {error && <div className="form-alert error">{error}</div>}
       <div className="form-grid">
         <label>Company legal name<input className="field" value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="Company name" /></label>
@@ -163,10 +206,12 @@ export function ProviderJoinForm() {
       </div>
 
       <label className="field-label service-area-heading">Primary service area</label>
-      <div className="form-grid compact-grid">
-        <label>ZIP code<input className="field" value={zip} disabled={statewide} onChange={(e) => setZip(e.target.value.replace(/\D/g,"").slice(0,5))} inputMode="numeric" placeholder="93721" /></label>
+      <div className="form-grid">
+        <label>Base ZIP code<input className="field" value={zip} disabled={statewide} onChange={(e) => setZip(e.target.value.replace(/\D/g,"").slice(0,5))} inputMode="numeric" placeholder="93721" /></label>
         <label>State<select className="field" value={state} onChange={(e) => setState(e.target.value)}>{usStates.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label>
+        <label>Service radius<select className="field" value={radius} disabled={statewide} onChange={(e) => setRadius(e.target.value)}>{radiusOptions.map((miles) => <option value={miles} key={miles}>{miles} miles</option>)}</select></label>
       </div>
+      <p className="radius-note">SecurityMatch will match requests inside the selected radius from your base ZIP, within the licensed state.</p>
       <label className="consent"><input type="checkbox" checked={statewide} onChange={(e) => setStatewide(e.target.checked)} /> My company can accept qualified assignments statewide in {state}.</label>
       <button className="button button-primary request-next" disabled={loading} onClick={submit}>{loading ? "Creating profile…" : "Create Provider Profile"}</button>
       <p className="auth-helper">SecurityMatch verifies provider information separately. A paid plan never substitutes for licensing or marketplace approval.</p>
