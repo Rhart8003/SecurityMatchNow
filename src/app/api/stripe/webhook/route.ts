@@ -1,7 +1,13 @@
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe, planForPrice } from "@/lib/stripe";
+import {
+  billingMode,
+  getStripe,
+  planForPrice,
+  webhookSecret,
+  type StripeBillingMode,
+} from "@/lib/stripe";
 
 type WebhookEventType =
   | "checkout.session.completed"
@@ -46,12 +52,13 @@ async function enqueueSubscriptionEvent(
   eventId: string,
   eventType: WebhookEventType,
   subscription: Stripe.Subscription,
+  mode: StripeBillingMode,
 ) {
   const priceId = subscription.items.data[0]?.price?.id;
-  const plan = eventType === "customer.subscription.deleted" ? null : planForPrice(priceId);
+  const plan = eventType === "customer.subscription.deleted" ? null : planForPrice(priceId, mode);
 
   if (eventType !== "customer.subscription.deleted" && !plan) {
-    throw new Error(`Stripe price is not mapped to a SecurityMatch plan: ${priceId || "missing"}`);
+    throw new Error(`Stripe price is not mapped to a SecurityMatch ${mode} plan: ${priceId || "missing"}`);
   }
 
   const providerId = subscription.metadata?.provider_id || null;
@@ -63,7 +70,7 @@ async function enqueueSubscriptionEvent(
 
   const db = createWebhookDbClient();
   const { error } = await db.from("stripe_webhook_inbox").insert({
-    event_id: eventId,
+    event_id: `${mode}:${eventId}`,
     event_type: eventType,
     provider_id: providerId,
     plan,
@@ -71,26 +78,28 @@ async function enqueueSubscriptionEvent(
     stripe_subscription_id: subscription.id,
     subscription_status: subscription.status,
     current_period_end: periodEndIso(subscription),
+    stripe_mode: mode,
   });
 
   if (error) throw error;
 }
 
 export async function POST(request: NextRequest) {
+  const mode = billingMode();
   const signature = request.headers.get("stripe-signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  const secret = webhookSecret(mode);
 
-  if (!signature || !webhookSecret) {
-    return NextResponse.json({ error: "Webhook is not configured." }, { status: 503 });
+  if (!signature || !secret) {
+    return NextResponse.json({ error: `${mode} webhook is not configured.` }, { status: 503 });
   }
 
   const rawBody = await request.text();
 
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = getStripe().webhooks.constructEvent(rawBody, signature, secret);
   } catch (error) {
-    console.error("Invalid Stripe webhook signature", error);
+    console.error(`Invalid Stripe ${mode} webhook signature`, error);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -105,7 +114,7 @@ export async function POST(request: NextRequest) {
         }
 
         const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
-        await enqueueSubscriptionEvent(event.id, event.type, subscription);
+        await enqueueSubscriptionEvent(event.id, event.type, subscription, mode);
         break;
       }
 
@@ -114,6 +123,7 @@ export async function POST(request: NextRequest) {
           event.id,
           event.type,
           event.data.object as Stripe.Subscription,
+          mode,
         );
         break;
 
@@ -122,6 +132,7 @@ export async function POST(request: NextRequest) {
           event.id,
           event.type,
           event.data.object as Stripe.Subscription,
+          mode,
         );
         break;
 
@@ -129,9 +140,9 @@ export async function POST(request: NextRequest) {
         break;
     }
 
-    return NextResponse.json({ received: true });
+    return NextResponse.json({ received: true, mode });
   } catch (error) {
-    console.error("Stripe webhook processing error", error);
+    console.error(`Stripe ${mode} webhook processing error`, error);
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }
