@@ -8,6 +8,7 @@ export function Header() {
         <Brand />
         <nav className="desktop-nav" aria-label="Main navigation">
           <Link href="/find-security">Find Security</Link>
+          <Link href="/markets">Markets</Link>
           <Link href="/providers">For Providers</Link>
           <Link href="/#how-it-works">How It Works</Link>
         </nav>
