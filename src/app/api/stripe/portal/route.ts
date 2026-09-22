@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { appUrl, getStripe } from "@/lib/stripe";
+import { appUrl, billingMode, getStripe } from "@/lib/stripe";
 
 export async function POST() {
   try {
@@ -24,12 +24,14 @@ export async function POST() {
 
     const { data: subscription } = await supabase
       .from("subscriptions")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id,stripe_mode")
       .eq("provider_id", provider.id)
       .maybeSingle();
 
-    if (!subscription?.stripe_customer_id) {
-      return NextResponse.json({ error: "No Stripe billing profile exists yet." }, { status: 409 });
+    const mode = billingMode();
+
+    if (!subscription?.stripe_customer_id || subscription.stripe_mode !== mode) {
+      return NextResponse.json({ error: `No ${mode} Stripe billing profile exists yet.` }, { status: 409 });
     }
 
     const session = await getStripe().billingPortal.sessions.create({
