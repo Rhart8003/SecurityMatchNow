@@ -12,7 +12,7 @@ const plans = [
 export default function ProvidersPage() {
   return (
     <main><Header />
-      <section className="provider-hero"><div className="container narrow"><span className="eyebrow light">FOR SECURITY PROVIDERS</span><h1>Spend less time chasing leads.<br/>Spend more time winning contracts.</h1><p>SecurityMatch delivers opportunities based on the services and territories your company actually covers.</p><Link href="/provider/join" className="button button-light">Join SecurityMatch</Link></div></section>
+      <section className="provider-hero"><div className="container narrow"><span className="eyebrow light">FOR SECURITY PROVIDERS</span><h1>Spend less time chasing leads.<br/>Spend more time winning contracts.</h1><p>SecurityMatch delivers opportunities based on the services and territories your company actually covers.</p><div className="market-actions"><Link href="/provider/join" className="button button-light">Join SecurityMatch</Link><Link href="/founding-providers" className="button button-outline-light">Founding Provider Program</Link></div></div></section>
       <section className="section"><div className="container"><div className="center-heading"><span className="eyebrow">PROVIDER PLANS</span><h2>Start free. Upgrade as your pipeline grows.</h2><p className="pricing-note">Paid plans are billed securely through Stripe. Marketplace approval and licensing verification remain separate from payment.</p></div><div className="plans-grid">
         {plans.map((plan) => (
           <div className={`plan-card ${plan.name === "Professional" ? "featured" : ""}`} key={plan.name}>
