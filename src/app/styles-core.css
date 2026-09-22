@@ -58,10 +58,45 @@ button { cursor: pointer; }
   backdrop-filter: blur(18px);
 }
 .nav-shell { min-height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 24px; letter-spacing: -1px; color: var(--text); }
-.brand strong { color: var(--gold-soft); }
-.brand-mark { color: var(--gold); width: 34px; height: 40px; display: inline-flex; filter: drop-shadow(0 0 18px rgba(212,175,55,.14)); }
-.brand-mark svg { width: 100%; height: 100%; }
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--text);
+  min-width: max-content;
+  transition: transform .18s ease;
+}
+.brand:hover { transform: translateY(-1px); }
+.brand-mark {
+  width: 38px;
+  height: 44px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 20px rgba(212,175,55,.11));
+}
+.brand-mark svg { width: 100%; height: 100%; overflow: visible; }
+.brand-copy { display: flex; flex-direction: column; gap: 2px; line-height: 1; }
+.brand-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 24px;
+  font-weight: 820;
+  letter-spacing: -1.15px;
+}
+.brand-security { color: #f7f4f0; }
+.brand-match {
+  color: var(--gold-soft);
+  font-weight: 900;
+  text-shadow: 0 0 22px rgba(212,175,55,.08);
+}
+.brand-descriptor {
+  font-size: 7px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .22em;
+  color: #6f6971;
+  white-space: nowrap;
+}
 .desktop-nav { display: flex; align-items: center; gap: 30px; font-weight: 750; font-size: 13px; color: #bbb6bc; }
 .desktop-nav a, .text-link { transition: .18s ease; }
 .desktop-nav a:hover, .text-link:hover { color: var(--gold-soft); }
