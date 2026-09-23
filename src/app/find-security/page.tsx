@@ -4,7 +4,7 @@ import { RequestForm } from "./request-form";
 export default async function FindSecurityPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const zip = typeof params.zip === "string" ? params.zip : "";
-  const state = typeof params.state === "string" ? params.state : "CA";
+  const state = typeof params.state === "string" ? params.state : "";
   const service = typeof params.service === "string" ? params.service : "";
   const urgent = params.urgent === "1";
   const resume = params.resume === "1";
