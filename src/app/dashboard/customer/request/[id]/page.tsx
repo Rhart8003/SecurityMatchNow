@@ -19,7 +19,7 @@ export default async function CustomerRequestPage({ params }: { params: Promise<
 
   const { data: request } = await supabase
     .from("security_requests")
-    .select("id,zip_code,city,state,officer_count,officer_type,status,selected_provider_id,description,services(name)")
+    .select("id,zip_code,city,state,street_address,property_name,property_type,start_at,end_at,service_timezone,officer_count,officer_type,status,selected_provider_id,description,onsite_contact_name,onsite_contact_phone,access_instructions,services(name)")
     .eq("id", id)
     .maybeSingle();
 
@@ -57,7 +57,14 @@ export default async function CustomerRequestPage({ params }: { params: Promise<
     <main><Header /><div className="container dashboard">
       <Link href="/dashboard/customer" className="text-link">← Back to dashboard</Link>
       <div className="detail-heading"><span className="eyebrow">QUOTE COMPARISON</span><h1>{service?.name || "Security Request"}</h1><p>{request.city ? `${request.city}, ` : ""}{request.zip_code}, {request.state} · {request.officer_count} {request.officer_type} officer{request.officer_count === 1 ? "" : "s"}</p></div>
-      {request.description && <div className="request-description"><b>Assignment details</b><p>{request.description}</p></div>}
+      <div className="request-description">
+        <b>Assignment location & schedule</b>
+        <p>{request.property_name ? request.property_name + " · " : ""}{request.street_address}{request.city ? " · " + request.city : ""}, {request.state} {request.zip_code}</p>
+        {request.property_type && <p>Property type: {request.property_type}</p>}
+        {request.start_at && <p>Starts: {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: request.service_timezone || "UTC" }).format(new Date(request.start_at))}</p>}
+        {request.end_at && <p>Ends: {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: request.service_timezone || "UTC" }).format(new Date(request.end_at))}</p>}
+        {request.description && <p>{request.description}</p>}
+      </div>
 
       {!quotes.length ? <div className="empty-state"><h2>No quotes yet.</h2><p>Matched providers can submit proposals from their SecurityMatch dashboards.</p></div> : (
         <div className="quote-grid">
