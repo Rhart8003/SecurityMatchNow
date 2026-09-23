@@ -16,7 +16,7 @@ export default async function CustomerDashboard() {
 
   const { data: requests = [] } = await supabase
     .from("security_requests")
-    .select("id,zip_code,state,officer_count,officer_type,status,is_urgent,created_at,services(name)")
+    .select("id,zip_code,city,state,property_name,street_address,officer_count,officer_type,status,is_urgent,created_at,services(name)")
     .eq("customer_user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -56,7 +56,7 @@ export default async function CustomerDashboard() {
                 <div>
                   <span className={request.is_urgent ? "urgent-badge" : "status-badge"}>{request.is_urgent ? "URGENT" : request.status.toUpperCase()}</span>
                   <h3>{serviceName(request.services)}</h3>
-                  <p>{request.zip_code}, {request.state || "US"} · {request.officer_count} {request.officer_type} officer{request.officer_count === 1 ? "" : "s"}</p>
+                  <p>{request.property_name ? request.property_name + " · " : ""}{request.city ? request.city + ", " : ""}{request.state || "US"} {request.zip_code} · {request.officer_count} {request.officer_type} officer{request.officer_count === 1 ? "" : "s"}</p>
                 </div>
                 <div className="quote-count"><b>{request.quoteCount}</b><span>quotes</span></div>
                 <Link className="button button-ghost" href={`/dashboard/customer/request/${request.id}`}>{request.quoteCount ? "View Quotes" : "View Request"}</Link>
