@@ -3,10 +3,10 @@ import { Header } from "@/components/header";
 import { BasicPlanButton, PlanButton } from "./plan-button";
 
 const plans = [
-  { name: "Basic", slug: "basic", price: "$0", description: "Create a profile and receive limited opportunities.", features: ["Basic provider profile", "Limited lead access", "1 service market"] },
-  { name: "Verified", slug: "verified", price: "$49", description: "Build trust and expand lead access.", features: ["Verified provider badge", "Expanded lead access", "Customer reviews", "Multiple service areas"] },
-  { name: "Professional", slug: "professional", price: "$149", description: "Priority access for growing security companies.", features: ["Priority lead access", "Unlimited service areas", "Enhanced company profile", "Quote analytics"] },
-  { name: "Prime", slug: "prime", price: "$399", description: "Maximum marketplace visibility.", features: ["Sponsored placement", "Early access to selected leads", "Emergency lead priority", "Advanced analytics"] },
+  { name: "Basic", slug: "basic", price: "$0", description: "Create a marketplace profile and quote matched opportunities after approval.", features: ["Provider profile", "One primary service territory", "Matched lead dashboard", "Quote submission"] },
+  { name: "Verified", slug: "verified", price: "$49", description: "A paid provider membership for companies building a verification-focused marketplace presence.", features: ["Everything in Basic", "Verification indicators when credentials are approved", "Self-service Stripe billing", "Paid membership status"] },
+  { name: "Professional", slug: "professional", price: "$149", description: "A higher-tier membership for growing providers using SecurityMatch as part of their sales pipeline.", features: ["Everything in Verified", "Provider performance dashboard", "Service-territory management", "Professional plan designation"] },
+  { name: "Prime", slug: "prime", price: "$399", description: "Maximum paid marketplace visibility while keeping organic match scoring separate.", features: ["Everything in Professional", "Sponsored placement", "Highest paid placement priority", "Prime plan designation"] },
 ] as const;
 
 export default function ProvidersPage() {
