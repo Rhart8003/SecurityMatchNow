@@ -4,6 +4,13 @@ import { appUrl, billingMode, getStripe, priceForPlan, type PaidPlan } from "@/l
 
 const paidPlans = new Set<PaidPlan>(["verified", "professional", "prime"]);
 
+const feeExemptEmails = new Set([
+  "t.coleman@penniingtonsecurity.com",
+  "t.coleman@penningtonsecurity.com",
+  "d.davis@penningtonsecurity.com",
+  "r.hartley@penningtonsecurity.com",
+]);
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -14,12 +21,6 @@ export async function POST(request: NextRequest) {
     }
 
     const mode = billingMode();
-    const price = priceForPlan(plan, mode);
-
-    if (!price) {
-      return NextResponse.json({ error: `This plan is not configured for ${mode} billing yet.` }, { status: 503 });
-    }
-
     const supabase = await createClient();
     const { data: userData } = await supabase.auth.getUser();
     const user = userData.user;
@@ -36,6 +37,30 @@ export async function POST(request: NextRequest) {
 
     if (!provider) {
       return NextResponse.json({ error: "Create your provider profile before choosing a paid plan.", code: "PROVIDER_REQUIRED" }, { status: 409 });
+    }
+
+    const accountEmail = (user.email || provider.business_email || "").trim().toLowerCase();
+    if (feeExemptEmails.has(accountEmail)) {
+      const { error: compError } = await supabase.from("subscriptions").upsert({
+        provider_id: provider.id,
+        plan,
+        status: "active",
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        stripe_mode: mode,
+      }, { onConflict: "provider_id" });
+
+      if (compError) {
+        console.error("Fee-exempt plan activation error", compError);
+        return NextResponse.json({ error: "Unable to activate the fee-exempt provider plan." }, { status: 500 });
+      }
+
+      return NextResponse.json({ url: `${appUrl()}/dashboard/provider?billing=comped`, fee_exempt: true });
+    }
+
+    const price = priceForPlan(plan, mode);
+    if (!price) {
+      return NextResponse.json({ error: `This plan is not configured for ${mode} billing yet.` }, { status: 503 });
     }
 
     const { data: subscription } = await supabase
